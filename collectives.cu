@@ -146,10 +146,10 @@ void reduce(float* dst, float* src, size_t size) {
 // These collectives are not as efficient as the ring collectives, but they
 // transmit a very small amount of data, so that is OK.
 std::vector<size_t> AllgatherInputLengths(int size, size_t this_rank_length) {
-    std::vector<size_t> lengths(size);
+    std::vector<size_t> lengths(size); // size是进程数
     MPI_Allgather(&this_rank_length, 1, MPI_UNSIGNED_LONG,
                   &lengths[0], 1, MPI_UNSIGNED_LONG, MPI_COMM_WORLD);
-    return lengths;
+    return lengths; // 返回了每个rank下的数据的length
 }
 
 
@@ -234,11 +234,13 @@ std::vector<size_t> AllgatherInputLengths(int size, size_t this_rank_length) {
 void RingAllreduce(float* data, size_t length, float** output_ptr) {
     // Get MPI size and rank.
     int rank;
+    // 获取rank
     int mpi_error = MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     if(mpi_error != MPI_SUCCESS)
         throw std::runtime_error("MPI_Comm_rank failed with an error");
 
-    int size;
+    int size; // 即是上面说的N
+    // size 就是进程的数量
     mpi_error = MPI_Comm_size(MPI_COMM_WORLD, &size);
     if(mpi_error != MPI_SUCCESS)
         throw std::runtime_error("MPI_Comm_size failed with an error");
@@ -253,25 +255,32 @@ void RingAllreduce(float* data, size_t length, float** output_ptr) {
 
     // Partition the elements of the array into N approximately equal-sized
     // chunks, where N is the MPI size.
+    // 将数据分为size个segment
     const size_t segment_size = length / size;
+    // 存入此vector中
     std::vector<size_t> segment_sizes(size, segment_size);
 
+    // residual=数据长度%nRanks,看能否被整除
     const size_t residual = length % size;
+    // 不能整除的话，则把剩下的长度分别加到不同的rank上去
     for (size_t i = 0; i < residual; ++i) {
         segment_sizes[i]++;
     }
 
     // Compute where each chunk ends.
     std::vector<size_t> segment_ends(size);
+    // segment_ends 就是表示的到此segment结束时的前面所有数据的数量
     segment_ends[0] = segment_sizes[0];
     for (size_t i = 1; i < segment_ends.size(); ++i) {
         segment_ends[i] = segment_sizes[i] + segment_ends[i - 1];
     }
 
+    // 最后一个应为length
     // The last segment should end at the very end of the buffer.
     assert(segment_ends[size - 1] == length);
 
     // Allocate the output buffer.
+    // 申请输出数据的内存空间
     float* output = alloc(length);
     *output_ptr =  output;
 
@@ -282,11 +291,14 @@ void RingAllreduce(float* data, size_t length, float** output_ptr) {
     // We know that segment_sizes[0] is going to be the largest buffer size,
     // because if there are any overflow elements at least one will be added to
     // the first segment.
+    // 由于segment_sizes[0]必定是最大的buffer
     float* buffer = alloc(segment_sizes[0]);
 
+    // 从我们的左手边得到数据
     // Receive from your left neighbor with wrap-around.
     const size_t recv_from = (rank - 1 + size) % size;
 
+    // 然后把自己的数据的给到右边
     // Send to your right neighbor with wrap-around.
     const size_t send_to = (rank + 1) % size;
 
@@ -301,21 +313,25 @@ void RingAllreduce(float* data, size_t length, float** output_ptr) {
     for (int i = 0; i < size - 1; i++) {
         int recv_chunk = (rank - i - 1 + size) % size;
         int send_chunk = (rank - i + size) % size;
+        // 这里是为了得到每个segment发送起始点的指针
         float* segment_send = &(output[segment_ends[send_chunk] -
                                    segment_sizes[send_chunk]]);
 
+        // 注意使用是 MPI_Irecv和MPI_Irecv
+        // 这里的接收的buffer和发送的segment_send都是新申请的内存(这是因为使用isend和irecv的原因)
         MPI_Irecv(buffer, segment_sizes[recv_chunk],
                 datatype, recv_from, 0, MPI_COMM_WORLD, &recv_req);
 
         MPI_Send(segment_send, segment_sizes[send_chunk],
                 MPI_FLOAT, send_to, 0, MPI_COMM_WORLD);
-
+        // 这里会计算要写入的数据的起始地址
         float *segment_update = &(output[segment_ends[recv_chunk] -
                                          segment_sizes[recv_chunk]]);
 
         // Wait for recv to complete before reduction
+        // wait会等到直到所有数据传输完成
         MPI_Wait(&recv_req, &recv_status);
-
+        // 这里segment_update拥有原来部分的数据，buffer拥有传来的数据，进行规约即可
         reduce(segment_update, buffer, segment_sizes[recv_chunk]);
     }
 
