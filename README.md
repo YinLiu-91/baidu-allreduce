@@ -62,3 +62,6 @@ void RingAllgather(float* data, size_t length, float** output);
 The interface is simple and inflexible and is meant as a demonstration. The
 code is fairly straightforward and the same technique can be integrated into
 existing codebases in a variety of ways.
+
+# 编译
+1.  `make MPI_ROOT=/usr/lib/x86_64-linux-gnu/openmpi/lib CUDA_ROOT=/usr/local/cuda`,而不是像上面

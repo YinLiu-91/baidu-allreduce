@@ -20,10 +20,10 @@ OBJS:=$(SRC:.cpp=.o) $(CU_SRC:.cu=.o)
 all: $(EXE_NAME)
 
 %.o: %.cpp
-	$(CC) -c $(CFLAGS) $< -o $@
+	$(CC) -c $(CFLAGS) -g $< -o $@
 
 %.o: %.cu
-	$(NVCC) -c $(CFLAGS) $< -o $@
+	$(NVCC) -c $(CFLAGS) -G $< -o $@
 
 $(EXE_NAME): $(OBJS)
 	$(CC) -o $(EXE_NAME) $(LDFLAGS) $^ $(LDFLAGS)

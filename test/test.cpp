@@ -83,7 +83,7 @@ void TestCollectivesGPU(std::vector<size_t>& sizes, std::vector<size_t>& iterati
 
     // Assume that the environment variable has an integer in it.
     int mpi_local_rank = std::stoi(std::string(env_str));
-    InitCollectives(mpi_local_rank);
+    InitCollectives(mpi_local_rank); // 这里进行了MPI_Init()内容
 
     // Get the MPI size and rank.
     int mpi_size;
@@ -93,8 +93,10 @@ void TestCollectivesGPU(std::vector<size_t>& sizes, std::vector<size_t>& iterati
     int mpi_rank;
     if(MPI_Comm_rank(MPI_COMM_WORLD, &mpi_rank) != MPI_SUCCESS)
         throw std::runtime_error("MPI_Comm_rank failed with an error");
-
+    std::cout<<"set Device: "<<mpi_local_rank<<" on rank: "<<mpi_rank<<"\n";
     cudaError_t err;
+    
+    std::cout<<"Start now!\n";
 
     timer::Timer timer;
     for(size_t i = 0; i < sizes.size(); i++) {
@@ -106,8 +108,9 @@ void TestCollectivesGPU(std::vector<size_t>& sizes, std::vector<size_t>& iterati
         float* data;
         err = cudaMalloc(&data, sizeof(float) * size);
         if(err != cudaSuccess) { throw std::runtime_error("cudaMalloc failed with an error"); }
-
+        std::cout<<"Start here!\n";
         float seconds = 0.0f;
+        std::cout<<"zai 113\n";
         for(size_t iter = 0; iter < iters; iter++) {
             // Initialize data as a block of ones, which makes it easy to check for correctness.
             for(size_t j = 0; j < size; j++) {
@@ -121,7 +124,7 @@ void TestCollectivesGPU(std::vector<size_t>& sizes, std::vector<size_t>& iterati
             timer.start();
             RingAllreduce(data, size, &output);
             seconds += timer.seconds();
-
+            std::cout<<"zai 127,iter= "<<iter<<"\n";
             err = cudaMemcpy(cpu_data, output, sizeof(float) * size, cudaMemcpyDeviceToHost);
             if(err != cudaSuccess) { throw std::runtime_error("cudaMemcpy failed with an error"); }
 
@@ -142,7 +145,7 @@ void TestCollectivesGPU(std::vector<size_t>& sizes, std::vector<size_t>& iterati
                 << seconds / iters
                 << " per iteration)" << std::endl;
         }
-
+        std::cout<<"zai 147\n";
         err = cudaFree(data);
         if(err != cudaSuccess) { throw std::runtime_error("cudaFree failed with an error"); }
         delete[] cpu_data;
@@ -151,6 +154,12 @@ void TestCollectivesGPU(std::vector<size_t>& sizes, std::vector<size_t>& iterati
 
 // Test program for baidu-allreduce collectives, should be run using `mpirun`.
 int main(int argc, char** argv) {
+    {
+        int i=0;
+        while(i==0){
+            int j=0;
+        }
+    }
     if(argc != 2) {
         std::cerr << "Usage: ./allreduce-test (cpu|gpu)" << std::endl;
         return 1;
@@ -158,15 +167,21 @@ int main(int argc, char** argv) {
     std::string input(argv[1]);
 
     // Buffer sizes used for tests.
+    // std::vector<size_t> buffer_sizes = {
+    //     0, 32, 256, 1024, 4096, 16384, 65536, 262144, 1048576, 8388608, 67108864, 536870912
+    // };
     std::vector<size_t> buffer_sizes = {
-        0, 32, 256, 1024, 4096, 16384, 65536, 262144, 1048576, 8388608, 67108864, 536870912
+        32
     };
 
     // Number of iterations to run for each buffer size.
+    // std::vector<size_t> iterations = {
+    //     100000, 100000, 100000, 100000,
+    //     1000, 1000, 1000, 1000,
+    //     100, 50, 10, 1
+    // };
     std::vector<size_t> iterations = {
-        100000, 100000, 100000, 100000,
-        1000, 1000, 1000, 1000,
-        100, 50, 10, 1
+            1
     };
 
     // Test on either CPU and GPU.
